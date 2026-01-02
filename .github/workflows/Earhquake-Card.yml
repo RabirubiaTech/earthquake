@@ -32,9 +32,6 @@ jobs:
           from datetime import datetime
           import io
 
-          # ---------------------------------------------------------
-          # FETCH USGS EARTHQUAKE DATA
-          # ---------------------------------------------------------
           FEED = "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_day.geojson"
 
           try:
@@ -48,9 +45,9 @@ jobs:
               for f in data["features"]:
                   mag = f["properties"]["mag"]
                   place = f["properties"]["place"]
+                  time = f["properties"]["time"]
                   lon, lat, depth = f["geometry"]["coordinates"]
 
-                  # Puerto Rico bounding box
                   if mag and mag >= 3.5:
                       if 16 <= lat <= 21 and -69 <= lon <= -63:
                           quakes.append({
@@ -58,15 +55,16 @@ jobs:
                               "place": place,
                               "lat": lat,
                               "lon": lon,
-                              "depth": depth
+                              "depth": depth,
+                              "time": time
                           })
 
-              # Sort newest first
-              quakes = sorted(quakes, key=lambda x: x["mag"], reverse=True)
+              # FIX: Sort by time (newest first)
+              quakes = sorted(quakes, key=lambda x: x["time"], reverse=True)
               quakes = quakes[:3]
 
           # ---------------------------------------------------------
-          # FORMAT EARTHQUAKE TEXT
+          # FORMAT TEXT
           # ---------------------------------------------------------
           if not quakes:
               quake_lines = ["No recent earthquakes ≥ 3.5 detected."]
@@ -82,13 +80,13 @@ jobs:
           quake_text = "\n".join(quake_lines)
 
           # ---------------------------------------------------------
-          # CREATE CARD BACKGROUND
+          # CARD BACKGROUND
           # ---------------------------------------------------------
           card = Image.new("RGB", (800, 900), "#f2f6fa")
           draw = ImageDraw.Draw(card)
 
           # ---------------------------------------------------------
-          # LOAD LOGO
+          # LOGO
           # ---------------------------------------------------------
           try:
               logo_data = requests.get(
@@ -121,15 +119,9 @@ jobs:
           today_str = datetime.now().strftime("%b %d, %Y")
           draw.text((200, 80), today_str, fill=TEXT, font=font_title)
 
-          # ---------------------------------------------------------
-          # TITLES
-          # ---------------------------------------------------------
           draw.text((400, 180), "Earthquake Activity", fill=TEXT, font=font_sub, anchor="mm")
           draw.text((400, 230), "Near Puerto Rico (M3.5+)", fill=TEXT, font=font_sub, anchor="mm")
 
-          # ---------------------------------------------------------
-          # EARTHQUAKE TEXT
-          # ---------------------------------------------------------
           draw.multiline_text(
               (80, 300),
               quake_text,
@@ -141,17 +133,11 @@ jobs:
           # ---------------------------------------------------------
           # MINI MAP (BOTTOM)
           # ---------------------------------------------------------
-          # Create blank map
           map_img = Image.new("RGB", (300, 300), "#d9e3ec")
           map_draw = ImageDraw.Draw(map_img)
 
-          # White border
-          border = Image.new("RGB", (304, 304), "white")
-          border.paste(map_img, (2, 2))
-
-          # Plot quakes
+          # FIX: Draw dots BEFORE adding border
           def map_coords(lat, lon):
-              # Simple linear projection for PR region
               x = int((lon + 69) / 6 * 300)
               y = int((21 - lat) / 5 * 300)
               return x, y
@@ -160,8 +146,12 @@ jobs:
               x, y = map_coords(q["lat"], q["lon"])
               map_draw.ellipse((x-6, y-6, x+6, y+6), fill="red")
 
-          # Paste map centered
-          card.paste(border, (250, 500))
+          # Add white border
+          bordered = Image.new("RGB", (304, 304), "white")
+          bordered.paste(map_img, (2, 2))
+
+          # Paste centered
+          card.paste(bordered, (250, 500))
 
           # ---------------------------------------------------------
           # FOOTER
@@ -169,9 +159,6 @@ jobs:
           footer = "USGS Earthquake Data | RabirubiaWeather.com | Updated every 4 hours"
           draw.text((400, 860), footer, fill=TEXT, font=font_footer, anchor="mm")
 
-          # ---------------------------------------------------------
-          # SAVE
-          # ---------------------------------------------------------
           card.save("earthquake_card.png", optimize=True)
           EOF
 
