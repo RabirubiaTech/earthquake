@@ -1,0 +1,189 @@
+name: Update Earthquake Card Image
+
+on:
+  schedule:
+    - cron: '0 */4 * * *'
+  workflow_dispatch:
+
+jobs:
+  generate-and-commit-image:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Python dependencies
+        run: |
+          pip install pillow requests
+
+      - name: Generate Earthquake Card
+        run: |
+          python3 << 'EOF'
+          import requests
+          from PIL import Image, ImageDraw, ImageFont
+          from datetime import datetime
+          import io
+
+          # ---------------------------------------------------------
+          # FETCH USGS EARTHQUAKE DATA
+          # ---------------------------------------------------------
+          FEED = "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_day.geojson"
+
+          try:
+              data = requests.get(FEED, timeout=20).json()
+          except:
+              data = None
+
+          quakes = []
+
+          if data and "features" in data:
+              for f in data["features"]:
+                  mag = f["properties"]["mag"]
+                  place = f["properties"]["place"]
+                  lon, lat, depth = f["geometry"]["coordinates"]
+
+                  # Puerto Rico bounding box
+                  if mag and mag >= 3.5:
+                      if 16 <= lat <= 21 and -69 <= lon <= -63:
+                          quakes.append({
+                              "mag": mag,
+                              "place": place,
+                              "lat": lat,
+                              "lon": lon,
+                              "depth": depth
+                          })
+
+              # Sort newest first
+              quakes = sorted(quakes, key=lambda x: x["mag"], reverse=True)
+              quakes = quakes[:3]
+
+          # ---------------------------------------------------------
+          # FORMAT EARTHQUAKE TEXT
+          # ---------------------------------------------------------
+          if not quakes:
+              quake_lines = ["No recent earthquakes ≥ 3.5 detected."]
+          else:
+              quake_lines = []
+              first = True
+              for q in quakes:
+                  label = "Currently" if first else "Recent"
+                  first = False
+                  line = f"{label}: M{q['mag']:.1f} – {q['place']} – Depth {int(q['depth'])} km"
+                  quake_lines.append(line)
+
+          quake_text = "\n".join(quake_lines)
+
+          # ---------------------------------------------------------
+          # CREATE CARD BACKGROUND
+          # ---------------------------------------------------------
+          card = Image.new("RGB", (800, 900), "#f2f6fa")
+          draw = ImageDraw.Draw(card)
+
+          # ---------------------------------------------------------
+          # LOAD LOGO
+          # ---------------------------------------------------------
+          try:
+              logo_data = requests.get(
+                  "https://static.wixstatic.com/media/80c250_b1146919dfe046429a96648c59e2c413~mv2.png",
+                  timeout=20
+              ).content
+              logo = Image.open(io.BytesIO(logo_data)).convert("RGBA")
+          except:
+              logo = Image.new("RGBA", (120, 120), "white")
+
+          logo = logo.resize((120, 120))
+          card.paste(logo, (40, 40), logo)
+
+          # ---------------------------------------------------------
+          # FONTS
+          # ---------------------------------------------------------
+          try:
+              font_title = ImageFont.truetype("DejaVuSans-Bold.ttf", 36)
+              font_sub = ImageFont.truetype("DejaVuSans.ttf", 32)
+              font_body = ImageFont.truetype("DejaVuSans.ttf", 26)
+              font_footer = ImageFont.truetype("DejaVuSans.ttf", 18)
+          except:
+              font_title = font_sub = font_body = font_footer = ImageFont.load_default()
+
+          TEXT = "#0a1a2f"
+
+          # ---------------------------------------------------------
+          # HEADER DATE
+          # ---------------------------------------------------------
+          today_str = datetime.now().strftime("%b %d, %Y")
+          draw.text((200, 80), today_str, fill=TEXT, font=font_title)
+
+          # ---------------------------------------------------------
+          # TITLES
+          # ---------------------------------------------------------
+          draw.text((400, 180), "Earthquake Activity", fill=TEXT, font=font_sub, anchor="mm")
+          draw.text((400, 230), "Near Puerto Rico (M3.5+)", fill=TEXT, font=font_sub, anchor="mm")
+
+          # ---------------------------------------------------------
+          # EARTHQUAKE TEXT
+          # ---------------------------------------------------------
+          draw.multiline_text(
+              (80, 300),
+              quake_text,
+              fill=TEXT,
+              font=font_body,
+              spacing=10
+          )
+
+          # ---------------------------------------------------------
+          # MINI MAP (BOTTOM)
+          # ---------------------------------------------------------
+          # Create blank map
+          map_img = Image.new("RGB", (300, 300), "#d9e3ec")
+          map_draw = ImageDraw.Draw(map_img)
+
+          # White border
+          border = Image.new("RGB", (304, 304), "white")
+          border.paste(map_img, (2, 2))
+
+          # Plot quakes
+          def map_coords(lat, lon):
+              # Simple linear projection for PR region
+              x = int((lon + 69) / 6 * 300)
+              y = int((21 - lat) / 5 * 300)
+              return x, y
+
+          for q in quakes:
+              x, y = map_coords(q["lat"], q["lon"])
+              map_draw.ellipse((x-6, y-6, x+6, y+6), fill="red")
+
+          # Paste map centered
+          card.paste(border, (250, 500))
+
+          # ---------------------------------------------------------
+          # FOOTER
+          # ---------------------------------------------------------
+          footer = "USGS Earthquake Data | RabirubiaWeather.com | Updated every 4 hours"
+          draw.text((400, 860), footer, fill=TEXT, font=font_footer, anchor="mm")
+
+          # ---------------------------------------------------------
+          # SAVE
+          # ---------------------------------------------------------
+          card.save("earthquake_card.png", optimize=True)
+          EOF
+
+      - name: Commit and push updated image
+        run: |
+          if [ ! -f earthquake_card.png ]; then
+            echo "ERROR: earthquake_card.png not found — aborting commit"
+            exit 1
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add earthquake_card.png
+          git commit -m "Auto-update earthquake card image" || echo "No changes to commit"
+          git push
