@@ -1,28 +1,4 @@
-name: Update Earthquake Card Image
-
-on:
-  schedule:
-    - cron: '0 */4 * * *'
-  workflow_dispatch:
-
-jobs:
-  generate-and-commit-image:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-
-      - name: Install Python dependencies
-        run: |
-          pip install pillow requests
+# [unchanged header and job setup]
 
       - name: Generate Earthquake Card
         run: |
@@ -62,10 +38,11 @@ jobs:
               quakes = sorted(quakes, key=lambda x: x["time"], reverse=True)
               quakes = quakes[:3]
 
+          # Format quake lines with spacing and wrapping
+          quake_lines_raw = []
           if not quakes:
               quake_lines_raw = ["No recent earthquakes ≥ 3.5 detected."]
           else:
-              quake_lines_raw = []
               first = True
               for q in quakes:
                   label = "Currently" if first else "Recent"
@@ -76,16 +53,15 @@ jobs:
                       f"{label}: M{q['mag']:.1f} – {q['place']} – "
                       f"Depth {int(q['depth'])} km – {time_str}"
                   )
-                  quake_lines_raw.append(line)
+                  quake_lines_raw.extend(textwrap.wrap(line, width=52))
+                  quake_lines_raw.append("")  # blank line between entries
 
-          wrapped_lines = []
-          for line in quake_lines_raw:
-              wrapped_lines.extend(textwrap.wrap(line, width=58))
-          quake_text = "\n".join(wrapped_lines)
+          quake_text = "\n".join(quake_lines_raw)
 
           card = Image.new("RGB", (800, 900), "#f2f6fa")
           draw = ImageDraw.Draw(card)
 
+          # Logo
           try:
               logo_data = requests.get(
                   "https://static.wixstatic.com/media/80c250_b1146919dfe046429a96648c59e2c413~mv2.png",
@@ -98,6 +74,7 @@ jobs:
           logo = logo.resize((120, 120))
           card.paste(logo, (40, 40), logo)
 
+          # Fonts
           try:
               font_title = ImageFont.truetype("DejaVuSans-Bold.ttf", 36)
               font_sub = ImageFont.truetype("DejaVuSans.ttf", 32)
@@ -118,9 +95,10 @@ jobs:
               quake_text,
               fill=TEXT,
               font=font_body,
-              spacing=14
+              spacing=6
           )
 
+          # Map
           LAT_MIN, LAT_MAX = 15, 21.5
           LON_MIN, LON_MAX = -71, -62
 
@@ -136,9 +114,9 @@ jobs:
               x, y = map_coords(q["lat"], q["lon"])
               map_draw.ellipse((x-6, y-6, x+6, y+6), fill="red")
 
-          # Add Puerto Rico marker
+          # Puerto Rico marker
           pr_x, pr_y = map_coords(18.2, -66.4)
-          map_draw.ellipse((pr_x-4, pr_y-4, pr_x+4, pr_y+4), fill="white", outline="black")
+          map_draw.ellipse((pr_x-3, pr_y-3, pr_x+3, pr_y+3), fill="white", outline="black", width=2)
 
           bordered = Image.new("RGB", (304, 304), "white")
           bordered.paste(map_img, (2, 2))
@@ -149,16 +127,3 @@ jobs:
 
           card.save("earthquake_card.png", optimize=True)
           EOF
-
-      - name: Commit and push updated image
-        run: |
-          if [ ! -f earthquake_card.png ]; then
-            echo "ERROR: earthquake_card.png not found — aborting commit"
-            exit 1
-          fi
-
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add earthquake_card.png
-          git commit -m "Auto-update earthquake card image" || echo "No changes to commit"
-          git push
