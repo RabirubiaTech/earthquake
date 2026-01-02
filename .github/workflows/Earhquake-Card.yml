@@ -101,7 +101,7 @@ jobs:
               logo = Image.new("RGBA", (100, 100), "white")
 
           logo = logo.resize((100, 100))
-          card.paste(logo, (30, 30), logo)
+          card.paste(logo, (30, 40), logo)
 
           try:
               font_title = ImageFont.truetype("DejaVuSans-Bold.ttf", 28)
@@ -157,7 +157,7 @@ jobs:
           bordered = Image.new("RGB", (324, 324), "white")
           bordered.paste(map_img, (2, 2))
 
-          card.paste(bordered, (460, 60))
+          card.paste(bordered, (460, 40))
 
           footer = "USGS Earthquake Data | RabirubiaWeather.com | Updated every 4 hours"
           draw.text((400, 420), footer, fill=TEXT, font=font_footer, anchor="mm")
