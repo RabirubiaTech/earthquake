@@ -32,9 +32,6 @@ jobs:
           from datetime import datetime, timezone
           import io, textwrap
 
-          # ---------------------------------------------------------
-          # FETCH USGS 7-DAY FEED (guarantees 3 quakes)
-          # ---------------------------------------------------------
           FEED = "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_week.geojson"
 
           try:
@@ -44,9 +41,6 @@ jobs:
 
           quakes = []
 
-          # ---------------------------------------------------------
-          # FILTER FOR PR REGION + MAG >= 3.5
-          # ---------------------------------------------------------
           if data and "features" in data:
               for f in data["features"]:
                   mag = f["properties"]["mag"]
@@ -65,13 +59,9 @@ jobs:
                               "time": time_ms
                           })
 
-              # Sort newest first
               quakes = sorted(quakes, key=lambda x: x["time"], reverse=True)
               quakes = quakes[:3]
 
-          # ---------------------------------------------------------
-          # FORMAT TEXT WITH DATE + TIME + WRAPPING
-          # ---------------------------------------------------------
           if not quakes:
               quake_lines_raw = ["No recent earthquakes ≥ 3.5 detected."]
           else:
@@ -80,31 +70,22 @@ jobs:
               for q in quakes:
                   label = "Currently" if first else "Recent"
                   first = False
-
                   t = datetime.fromtimestamp(q["time"] / 1000, tz=timezone.utc)
                   time_str = t.strftime("%b %d, %Y %H:%M UTC")
-
                   line = (
                       f"{label}: M{q['mag']:.1f} – {q['place']} – "
                       f"Depth {int(q['depth'])} km – {time_str}"
                   )
                   quake_lines_raw.append(line)
 
-          # Wrap lines to avoid overflow
           wrapped_lines = []
           for line in quake_lines_raw:
-              wrapped_lines.extend(textwrap.wrap(line, width=65))
+              wrapped_lines.extend(textwrap.wrap(line, width=58))
           quake_text = "\n".join(wrapped_lines)
 
-          # ---------------------------------------------------------
-          # CARD BACKGROUND
-          # ---------------------------------------------------------
           card = Image.new("RGB", (800, 900), "#f2f6fa")
           draw = ImageDraw.Draw(card)
 
-          # ---------------------------------------------------------
-          # LOGO
-          # ---------------------------------------------------------
           try:
               logo_data = requests.get(
                   "https://static.wixstatic.com/media/80c250_b1146919dfe046429a96648c59e2c413~mv2.png",
@@ -117,25 +98,18 @@ jobs:
           logo = logo.resize((120, 120))
           card.paste(logo, (40, 40), logo)
 
-          # ---------------------------------------------------------
-          # FONTS
-          # ---------------------------------------------------------
           try:
               font_title = ImageFont.truetype("DejaVuSans-Bold.ttf", 36)
               font_sub = ImageFont.truetype("DejaVuSans.ttf", 32)
-              font_body = ImageFont.truetype("DejaVuSans.ttf", 22)
+              font_body = ImageFont.truetype("DejaVuSans.ttf", 21)
               font_footer = ImageFont.truetype("DejaVuSans.ttf", 18)
           except:
               font_title = font_sub = font_body = font_footer = ImageFont.load_default()
 
           TEXT = "#0a1a2f"
-
-          # ---------------------------------------------------------
-          # HEADER
-          # ---------------------------------------------------------
           today_str = datetime.now().strftime("%b %d, %Y")
-          draw.text((200, 80), today_str, fill=TEXT, font=font_title)
 
+          draw.text((200, 80), today_str, fill=TEXT, font=font_title)
           draw.text((400, 180), "Earthquake Activity", fill=TEXT, font=font_sub, anchor="mm")
           draw.text((400, 230), "Near Puerto Rico (M3.5+)", fill=TEXT, font=font_sub, anchor="mm")
 
@@ -144,12 +118,9 @@ jobs:
               quake_text,
               fill=TEXT,
               font=font_body,
-              spacing=8
+              spacing=14
           )
 
-          # ---------------------------------------------------------
-          # MINI MAP
-          # ---------------------------------------------------------
           LAT_MIN, LAT_MAX = 15, 21.5
           LON_MIN, LON_MAX = -71, -62
 
@@ -165,13 +136,14 @@ jobs:
               x, y = map_coords(q["lat"], q["lon"])
               map_draw.ellipse((x-6, y-6, x+6, y+6), fill="red")
 
+          # Add Puerto Rico marker
+          pr_x, pr_y = map_coords(18.2, -66.4)
+          map_draw.ellipse((pr_x-4, pr_y-4, pr_x+4, pr_y+4), fill="white", outline="black")
+
           bordered = Image.new("RGB", (304, 304), "white")
           bordered.paste(map_img, (2, 2))
           card.paste(bordered, (250, 500))
 
-          # ---------------------------------------------------------
-          # FOOTER
-          # ---------------------------------------------------------
           footer = "USGS Earthquake Data | RabirubiaWeather.com | Updated every 4 hours"
           draw.text((400, 860), footer, fill=TEXT, font=font_footer, anchor="mm")
 
