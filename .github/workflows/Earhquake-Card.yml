@@ -1,3 +1,4 @@
+# Earthquake card workflow with AST time and expanded layout
 name: Update Earthquake Card Image
 
 on:
@@ -90,7 +91,7 @@ jobs:
 
           quake_text = "\n".join(quake_lines_raw)
 
-          card = Image.new("RGB", (800, 540), "#f2f6fa")
+          card = Image.new("RGB", (800, 580), "#f2f6fa")
           draw = ImageDraw.Draw(card)
 
           try:
@@ -126,7 +127,7 @@ jobs:
           draw.text((230, 155), "Near Puerto Rico (M3.5+)", fill=TEXT, font=font_sub, anchor="mm")
 
           draw.multiline_text(
-              (40, 270),
+              (40, 240),
               quake_text,
               fill=TEXT,
               font=font_body,
@@ -163,7 +164,7 @@ jobs:
           card.paste(bordered, (460, 40))
 
           footer = "USGS Earthquake Data | RabirubiaWeather.com | Updated every 4 hours"
-          draw.text((400, 510), footer, fill=TEXT, font=font_footer, anchor="mm")
+          draw.text((400, 550), footer, fill=TEXT, font=font_footer, anchor="mm")
 
           card.save("earthquake_card.png", optimize=True)
           EOF
