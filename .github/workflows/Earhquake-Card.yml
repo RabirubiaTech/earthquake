@@ -123,7 +123,7 @@ jobs:
           draw.text((160, 75), updated_str, fill="#4a5a6a", font=font_body)
 
           draw.text((230, 160), "Earthquake Activity", fill=TEXT, font=font_sub, anchor="mm")
-          draw.text((230, 195), "Near Puerto Rico (M3.5+)", fill=TEXT, font=font_sub, anchor="mm")
+          draw.text((230, 195), "Near Puerto Rico (M3.0+)", fill=TEXT, font=font_sub, anchor="mm")
 
           draw.multiline_text(
               (40, 240),
